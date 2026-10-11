@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ПРЕЗИДЕНТ — Симулятор решений</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Arial, sans-serif;
+    background: #0a0e1a;
+    color: #e8ecf5;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+  }
+  .app { width: 100%; max-width: 720px; }
+
+  .header {
+    background: linear-gradient(135deg, #1a2340, #0f1528);
+    border: 1px solid #2a3555;
+    border-radius: 16px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+  }
+  .title { font-size: 20px; font-weight: 700; letter-spacing: 1px; }
+  .subtitle { font-size: 12px; color: #7a88a8; margin-top: 2px; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .stat {
+    background: #131a2e;
+    border: 1px solid #232d4a;
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+  .stat .name { font-size: 11px; color: #7a88a8; letter-spacing: 0.5px; text-transform: uppercase; }
+  .stat .val { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .bar { height: 6px; background: #232d4a; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 4px; transition: width 0.4s; }
+
+  .scene {
+    background: #131a2e;
+    border: 1px solid #232d4a;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 14px;
+    min-height: 140px;
+  }
+  .scene .event-tag {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #2a1a1a;
+    color: #ff8080;
+    border: 1px solid #5a2a2a;
+    margin-bottom: 10px;
+  }
+  .scene .event-tag.good { background:#1a2a1a; color:#80ff80; border-color:#2a5a2a; }
+  .scene .event-tag.neutral { background:#2a2a1a; color:#ffd86b; border-color:#5a5a2a; }
+  .scene h2 { font-size: 18px; margin-bottom: 10px; }
+  .scene p { font-size: 15px; line-height: 1.55; color: #c5cee0; }
+
+  .choices { display: flex; flex-direction: column; gap: 10px; }
+  .choice {
+    text-align: left;
+    background: #1a2340;
+    border: 1px solid #2f3d63;
+    color: #e8ecf5;
+    padding: 14px 16px;
+    border-radius: 12px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .choice:hover { background: #24305a; border-color: #4a5d99; transform: translateX(4px); }
+  .choice:active { transform: scale(0.98); }
+  .choice .hint { display: block; font-size: 12px; color: #7a88a8; margin-top: 4px; }
+
+  .log {
+    background: #0f1528;
+    border: 1px solid #232d4a;
+    border-radius: 16px;
+    padding: 14px 18px;
+    margin-top: 14px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .log h3 { font-size: 12px; color: #7a88a8; letter-spacing: 1px; margin-bottom: 8px; }
+  .log p { font-size: 13px; color: #a8b3cc; margin-bottom: 6px; line-height: 1.4; }
+  .log p b { color: #ffd86b; }
+
+  .gameover {
+    text-align: center;
+    background: linear-gradient(135deg, #2a1020, #1a0a14);
+    border: 1px solid #5a2a3a;
+    border-radius: 16px;
+    padding: 28px 20px;
+  }
+  .gameover h1 { font-size: 26px; margin-bottom: 10px; }
+  .gameover .reason { color: #a8b3cc; font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+  .gameover .days { font-size: 13px; color: #7a88a8; margin-bottom: 20px; }
+  .btn {
+    background: #ff8c00;
+    color: #fff;
+    border: none;
+    padding: 14px 32px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn:hover { background: #e07a00; }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+// ================== СОСТОЯНИЕ ==================
+let S;
+
+function newGame() {
+  S = {
+    day: 1,
+    economy: 70,
+    army: 60,
+    people: 75,
+    world: 65,
+    tech: 40,
+    stability: 80,
+    log: [],
+    gameOver: false,
+    endReason: '',
+  };
+  render();
+}
+
+// ================== СОБЫТИЯ ==================
+// Каждое событие: tag, tagType, title, text, choices[]
+// choice: text, hint, effect(state) -> строка результата
+
+const events = [
+  {
+    tag: '🔴 УГРОЗА', tagType: 'bad',
+    title: 'Враг создал вирус',
+    text: 'Разведка сообщает: соседняя страна разработала биологическое оружие. Вирус может уничтожить урожай и заразить города. Что делаем?',
+    choices: [
+      { text: '💊 Инвестировать в вакцину', hint: 'Экономика −10, Технологии +15, Народ +5',
+        effect: s => { s.economy -= 10; s.tech += 15; s.people += 5; return 'Учёные создали вакцину. Народ спокоен.'; } },
+      { text: '💣 Нанести превентивный удар', hint: 'Мир −25, Армия −10, Враг ослаблен',
+        effect: s => { s.world -= 25; s.army -= 10; s.stability -= 5; return 'Удар нанесён. Мир в ярости, но угроза устранена.'; } },
+      { text: '🤝 Предложить переговоры', hint: 'Мир +10, но риск обмана',
+        effect: s => { s.world += 10; if (Math.random() < 0.5) { s.people -= 15; s.tech -= 5; return 'Враг обманул! Вирус всё равно выпущен.'; } return 'Переговоры успешны. Напряжённость спала.'; } },
+    ]
+  },
+  {
+    tag: '🟡 ЭКОНОМИКА', tagType: 'neutral',
+    title: 'Кризис на бирже',
+    text: 'Фондовый рынок падает третий день. Инвесторы паникуют, капитал утекает за границу.',
+    choices: [
+      { text: '💰 Влить госденьги', hint: 'Экономика +10, но инфляция',
+        effect: s => { s.economy += 10; s.people -= 5; return 'Рынок стабилизирован, но цены выросли.'; } },
+      { text: '📉 Ничего не делать', hint: 'Экономика −15, Народ −10',
+        effect: s => { s.economy -= 15; s.people -= 10; return 'Кризис усилился. Люди недовольны.'; } },
+      { text: '🏦 Национализировать банки', hint: 'Экономика +5, Мир −10, Стабильность +10',
+        effect: s => { s.economy += 5; s.world -= 10; s.stability += 10; return 'Банки под контролем государства.'; } },
+    ]
+  },
+  {
+    tag: '🟢 СОЦИУМ', tagType: 'good',
+    title: 'Протесты в столице',
+    text: 'Тысячи людей вышли на улицы с требованиями повысить зарплаты и улучшить медицину.',
+    choices: [
+      { text: '💵 Повысить зарплаты', hint: 'Народ +15, Экономика −10',
+        effect: s => { s.people += 15; s.economy -= 10; return 'Люди довольны, бюджет напряжён.'; } },
+      { text: '🚔 Разогнать протесты', hint: 'Стабильность −20, Мир −15, Народ −20',
+        effect: s => { s.stability -= 20; s.world -= 15; s.people -= 20; return 'Протесты подавлены силой. Мир осуждает.'; } },
+      { text: '🎤 Выйти к народу', hint: 'Народ +5, Стабильность +5',
+        effect: s => { s.people += 5; s.stability += 5; return 'Ты выступил с речью. Народ немного успокоился.'; } },
+    ]
+  },
+  {
+    tag: '🔴 ВОЙНА', tagType: 'bad',
+    title: 'Вторжение на границе',
+    text: 'Вооружённые силы соседа пересекли границу. Идёт бой за пограничный город.',
+    choices: [
+      { text: '⚔️ Дать отпор', hint: 'Армия −20, Мир −10, Народ +10',
+        effect: s => { s.army -= 20; s.world -= 10; s.people += 10; 
+          if (Math.random() < 0.5) { s.stability -= 15; return 'Бой проигран. Город оккупирован.'; }
+          return 'Победа! Враг отброшен.'; } },
+      { text: '🕊️ Уступить территорию', hint: 'Народ −25, Стабильность −15',
+        effect: s => { s.people -= 25; s.stability -= 15; s.world += 5; return 'Мир сохранил жизни, но народ в ярости.'; } },
+      { text: '🌍 Просить помощи у союзников', hint: 'Мир +10, Армия +5',
+        effect: s => { s.world += 10; s.army += 5; 
+          if (Math.random() < 0.4) return 'Союзники отказали. Придётся справляться самим.';
+          return 'Союзники прислали войска и технику.'; } },
+    ]
+  },
+  {
+    tag: '🟡 ТЕХНОЛОГИИ', tagType: 'neutral',
+    title: 'Прорыв в ИИ',
+    text: 'Твои учёные создали мощный искусственный интеллект. Он может управлять армией и экономикой.',
+    choices: [
+      { text: '🤖 Внедрить в армию', hint: 'Армия +20, Технологии +10',
+        effect: s => { s.army += 20; s.tech += 10; return 'ИИ управляет дронами и ПВО.'; } },
+      { text: '🏭 Внедрить в экономику', hint: 'Экономика +20, Народ −10',
+        effect: s => { s.economy += 20; s.people -= 10; return 'Роботы заменили рабочих. Безработица.'; } },
+      { text: '🔒 Засекретить', hint: 'Технологии +5, Стабильность +5',
+        effect: s => { s.tech += 5; s.stability += 5; return 'Разработки спрятаны от чужих глаз.'; } },
+    ]
+  },
+  {
+    tag: '🔴 КАТАСТРОФА', tagType: 'bad',
+    title: 'Природная катастрофа',
+    text: 'Землетрясение разрушило несколько городов. Тысячи людей остались без жилья.',
+    choices: [
+      { text: '🚑 Мобилизовать всё', hint: 'Экономика −20, Народ +20',
+        effect: s => { s.economy -= 20; s.people += 20; return 'Спасатели работают круглосуточно.'; } },
+      { text: '🌍 Принять помощь извне', hint: 'Мир +10, Народ +10',
+        effect: s => { s.world += 10; s.people += 10; s.stability -= 5; return 'Помощь принята, но оппозиция критикует.'; } },
+      { text: '🏗️ Игнорировать', hint: 'Народ −25, Стабильность −10',
+        effect: s => { s.people -= 25; s.stability -= 10; return 'Люди брошены. Регион бунтует.'; } },
+    ]
+  },
+  {
+    tag: '🟢 ДИПЛОМАТИЯ', tagType: 'good',
+    title: 'Предложение о союзе',
+    text: 'Крупная держава предлагает военный и экономический союз.',
+    choices: [
+      { text: '✅ Принять', hint: 'Мир +15, Армия +10, но потеря части суверенитета',
+        effect: s => { s.world += 15; s.army += 10; s.stability -= 5; return 'Союз подписан. Ты получил мощного партнёра.'; } },
+      { text: '❌ Отказаться', hint: 'Стабильность +5, Мир −10',
+        effect: s => { s.stability += 5; s.world -= 10; return 'Ты сохранил независимость, но обидел державу.'; } },
+    ]
+  },
+  {
+    tag: '🟡 ВНУТРЕННЕЕ', tagType: 'neutral',
+    title: 'Коррупционный скандал',
+    text: 'Твои министры обвиняются в хищении миллиардов.',
+    choices: [
+      { text: '⚖️ Публично наказать', hint: 'Народ +15, Стабильность −10',
+        effect: s => { s.people += 15; s.stability -= 10; s.economy += 5; return 'Показательная расправа. Народ аплодирует.'; } },
+      { text: '🤫 Замять', hint: 'Народ −15, Стабильность +5',
+        effect: s => { s.people -= 15; s.stability += 5; return 'Скандал затушён, но слухи ходят.'; } },
+      { text: '🔄 Заменить всех', hint: 'Экономика −5, Народ +5',
+        effect: s => { s.economy -= 5; s.people += 5; return 'Новая команда. Работа с нуля.'; } },
+    ]
+  },
+];
+
+// ================== ЛОГИКА ==================
+let currentEvent = null;
+
+function pickEvent() {
+  // Не повторяем последнее событие
+  let e;
+  do { e = events[Math.floor(Math.random() * events.length)]; }
+  while (e === currentEvent && events.length > 1);
+  currentEvent = e;
+  return e;
+}
+
+function clamp(v) { return Math.max(0, Math.min(100, v)); }
+
+function checkGameOver() {
+  if (S.stability <= 0) return 'Революция! Тебя свергли.';
+  if (S.people <= 0) return 'Народ восстал. Ты бежал из страны.';
+  if (S.economy <= 0) return 'Экономика рухнула. Страна в хаосе.';
+  if (S.army <= 0) return 'Армия разбежалась. Враги захватили страну.';
+  if (S.world <= 0) return 'Мировое сообщество ввело полную блокаду.';
+  if (S.day > 40) return '🏆 Ты продержался 40 дней! Народ гордится тобой.';
+  return null;
+}
+
+function choose(choiceIndex) {
+  if (S.gameOver) return;
+  const c = currentEvent.choices[choiceIndex];
+  const result = c.effect(S);
+
+  // Ограничение значений
+  S.economy = clamp(S.economy);
+  S.army = clamp(S.army);
+  S.people = clamp(S.people);
+  S.world = clamp(S.world);
+  S.tech = clamp(S.tech);
+  S.stability = clamp(S.stability);
+
+  S.log.unshift(`День ${S.day}: ${c.text} → ${result}`);
+  S.day++;
+
+  const over = checkGameOver();
+  if (over) {
+    S.gameOver = true;
+    S.endReason = over;
+  }
+
+  render();
+}
+
+// ================== РЕНДЕР ==================
+function statBar(name, val, color) {
+  return `<div class="stat">
+    <div class="name">${name}</div>
+    <div class="val">${Math.round(val)}</div>
+    <div class="bar"><div style="width:${val}%; background:${color};"></div></div>
+  </div>`;
+}
+
+function render() {
+  const app = document.getElementById('app');
+
+  if (S.gameOver) {
+    app.innerHTML = `
+      <div class="header">
+        <div class="title">ПРЕЗИДЕНТ</div>
+        <div class="subtitle">Симулятор решений</div>
+      </div>
+      <div class="gameover">
+        <h1>${S.endReason.includes('🏆') ? '🏆 Победа!' : '💀 Конец игры'}</h1>
+        <div class="reason">${S.endReason}</div>
+        <div class="days">Ты правил ${S.day - 1} дней</div>
+        <button class="btn" onclick="newGame()">Начать заново</button>
+      </div>
+      <div class="log">
+        <h3>ИСТОРИЯ РЕШЕНИЙ</h3>
+        ${S.log.map(l => `<p>${l}</p>`).join('')}
+      </div>
+    `;
+    return;
+  }
+
+  const e = pickEvent();
+  app.innerHTML = `
+    <div class="header">
+      <div class="title">ПРЕЗИДЕНТ</div>
+      <div class="subtitle">День ${S.day} · Симулятор решений</div>
+    </div>
+
+    <div class="stats">
+      ${statBar('Экономика', S.economy, '#4ade80')}
+      ${statBar('Армия', S.army, '#60a5fa')}
+      ${statBar('Народ', S.people, '#f472b6')}
+      ${statBar('Мир', S.world, '#a78bfa')}
+      ${statBar('Технологии', S.tech, '#22d3ee')}
+      ${statBar('Стабильность', S.stability, '#fbbf24')}
+    </div>
+
+    <div class="scene">
+      <span class="event-tag ${e.tagType}">${e.tag}</span>
+      <h2>${e.title}</h2>
+      <p>${e.text}</p>
+    </div>
+
+    <div class="choices">
+      ${e.choices.map((c, i) => `
+        <button class="choice" onclick="choose(${i})">
+          ${c.text}
+          <span class="hint">${c.hint}</span>
+        </button>
+      `).join('')}
+    </div>
+
+    <div class="log">
+      <h3>ИСТОРИЯ РЕШЕНИЙ</h3>
+      ${S.log.length === 0 ? '<p>Пока пусто. Прими первое решение.</p>' :
+        S.log.slice(0, 8).map(l => `<p>${l}</p>`).join('')}
+    </div>
+  `;
+}
+
+// ================== СТАРТ ==================
+window.choose = choose;
+window.newGame = newGame;
+newGame();
+</script>
+</body>
+</html>
